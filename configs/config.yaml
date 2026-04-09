@@ -1,0 +1,17 @@
+defaults:
+  - city: davidson
+  - demand: empirical
+  - policy: nearest
+  - solver: nearest
+  - _self_
+
+seed: 42
+
+simulation:
+  max_incidents: 1000
+  start_time: null  # null = use first incident time from CSV
+  drain: true
+  max_drain_time: 7200  # seconds to wait for all apparatus to return
+
+logging:
+  level: INFO

@@ -1,0 +1,13 @@
+geography:
+  boundary:
+    north: 36.42
+    south: 35.96
+    east: -86.50
+    west: -87.06
+  h3_resolution: 8
+  cache_dir: cache
+  network_type: drive
+  bounds_geojson: data/bounds.geojson
+
+stations:
+  csv_path: data/stations_with_apparatus.csv
