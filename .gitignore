@@ -19,3 +19,5 @@ multirun/
 .hydra/
 uv.lock
 *.osm.pbf
+*.osrm
+*.osrm.*
