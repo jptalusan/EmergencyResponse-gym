@@ -1,0 +1,27 @@
+cliArgs:
+  threads: 4 # number of threads to use (-t)
+  explore: 5 # exploration level to use (0..5) (-x)
+  logdir: './logs' # the path for the logs relative to ./src
+  logsize: '100M' # max log file size for rotation
+  path: '' # VROOM path (if not in $PATH)
+  port: 3000 # expressjs port
+  host: osrm
+  router: 'osrm' # routing backend (osrm, libosrm or ors)
+  baseurl: '/'
+
+# Routing backend configuration
+routingServers:
+  osrm:
+    car:
+      host: osrm
+      port: 5000
+      profile: car
+
+# Enable API features
+services:
+  express: true
+
+# Default solver settings (safe defaults)
+defaults:
+  vehicle_speed: 40
+  rounding: 6
