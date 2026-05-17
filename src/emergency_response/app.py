@@ -10,12 +10,17 @@ from omegaconf import DictConfig
 
 logger = logging.getLogger(__name__)
 
+def get_project_root() -> str:
+    try:
+        return hydra.utils.get_original_cwd()
+    except ValueError:
+        return str(Path.cwd())
 
 def build_scenario(cfg: DictConfig, orig_cwd: str):
     """Build a Scenario from Hydra config."""
     from emergency_response.geography.network import NetworkGeography
     from emergency_response.models.scenario import Scenario
-    from emergency_response.utils.loaders import load_bounds, load_incidents, load_stations
+    from emergency_response.utils.loaders import load_bounds, load_stations
 
     geo_cfg = cfg.city.geography
 
@@ -91,6 +96,11 @@ def build_policy(cfg: DictConfig, geography, solver):
 
 @hydra.main(version_base=None, config_path="../../configs", config_name="config")
 def main(cfg: DictConfig) -> None:
+    emergency_response_sim(cfg)
+    return
+
+
+def emergency_response_sim(cfg: DictConfig):
     """Run an emergency response simulation."""
     from emergency_response.env.emergency_env import EmergencyEnv
     from emergency_response.metrics import (
@@ -101,7 +111,7 @@ def main(cfg: DictConfig) -> None:
         print_summary,
     )
 
-    orig_cwd = hydra.utils.get_original_cwd()
+    orig_cwd = get_project_root()
 
     logger.info("Building scenario...")
     scenario, bounds_polygon = build_scenario(cfg, orig_cwd)
@@ -137,8 +147,11 @@ def main(cfg: DictConfig) -> None:
             m = env.metrics
             logger.info(
                 "Incident %d/%d | Mean response time: %.0fs | Dispatched: %d | Resolved: %d",
-                i + 1, max_incidents, m.mean_response_time,
-                m.dispatched_incidents, m.resolved_incidents,
+                i + 1,
+                max_incidents,
+                m.mean_response_time,
+                m.dispatched_incidents,
+                m.resolved_incidents,
             )
 
         if done:
@@ -158,6 +171,11 @@ def main(cfg: DictConfig) -> None:
     export_csv(records, output_dir / "incident_report.csv")
     export_apparatus_events(env.apparatus_events, output_dir / "apparatus_events.csv")
     export_step_records(env.step_records, output_dir / "step_trace.csv")
+    return (
+        str(Path(output_dir / "incident_report.csv")),
+        str(Path(output_dir / "apparatus_events.csv")),
+        str(Path(output_dir / "step_trace.csv"))
+    )
 
 
 if __name__ == "__main__":

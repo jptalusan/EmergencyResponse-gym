@@ -1,1 +1,1 @@
-# src/backend/services/__init__.py
+# src/backend/service/__init__.py

@@ -4,6 +4,8 @@ Event-driven gym environment for simulating fire/EMS emergency response dispatch
 
 ## Quick start
 
+### Simulation (standalone)
+
 ```bash
 # Install dependencies
 uv sync --dev
@@ -14,6 +16,41 @@ uv run python -m emergency_response.app
 # Run tests
 uv run pytest
 ```
+Simulation results are written into CSV files under `/output`.
+
+### FastAPI backend
+
+***Ensure the `Memory Limit` allocated in `Docker > Settings > Resources` is adequate (~24 GB).***
+
+#### Steps
+- Start Docker. ([Docker](https://www.docker.com/), [Get started](https://docs.docker.com/get-started/), [Get Docker](https://docs.docker.com/get-started/get-docker/))
+    ```bash
+    # Set up from 'docker-compose.yml'.
+    docker-compose up
+    # Trigger a new build.
+    docker-compose up --build
+    ```
+- In your browser, go to one of the following URLs (same funcionality, slightly different UI):
+    - http://127.0.0.1:8000/docs
+    - http://127.0.0.1:8000/redoc
+- Now you can:
+    - Register a user.
+    - Log in a user with a valid `username` and `password` combination.
+    - Submit a job. Use the following `string` values (or a valid directory and name of a configuration file) for `config_dir` and `config_name`.
+        ```python
+        {
+            config_dir = "/app/configs",
+            config_name = "config"
+        }
+        ```
+    - List all the jobs belonging to a user. 
+    - Get (retrieve) the details of a specific job of a user.
+    - Run a simulation (no authenication required). This is intended for development purposes. Avoid using it as part of the application. It will be removed eventually.
+    - Check the health of the backend. (Currently returns `"ok"` at all times.)
+- Job details are stored locally under
+    - `/storage/jobs/{job_id}/configs` for configurations,
+    - `/storage/jobs/{job_id}/data` for data (input),
+    - `/storage/jobs/{job_id}/output` for output.
 
 ## How the environment works
 
@@ -115,45 +152,74 @@ Delete `cache/` to force a full rebuild.
 ## Project structure
 
 ```
-src/emergency_response/
-├── app.py                      # Hydra entry point
-├── metrics.py                  # Incident reporting + CSV export
-├── env/
-│   └── emergency_env.py        # EmergencyEnv (the core simulation)
-├── models/
-│   ├── core.py                 # Incident, Apparatus, FireStation, State, enums
-│   └── scenario.py             # Scenario config dataclass
-├── geography/
-│   ├── base.py                 # TravelTimeProvider protocol (OSRM-like interface)
-│   ├── network.py              # NetworkGeography (OSMnx + cached shortest paths)
-│   └── h3_index.py             # H3 spatial index for coordinate snapping
-├── demand/
-│   ├── base.py                 # IncidentModel ABC
-│   └── empirical.py            # Replays incidents.csv chronologically
-├── policy/
-│   ├── base.py                 # DispatchPolicy ABC
-│   └── nearest.py              # Nearest available apparatus heuristic
-├── solver/
-│   ├── base.py                 # DispatchSolver ABC
-│   └── nearest.py              # Greedy nearest solver
-└── utils/
-    ├── cache.py                # load_or_compute (pickle-based)
-    └── loaders.py              # CSV/GeoJSON loaders + coordinate snapping
+EmergencyResponse-gym/
+├── configs/                            # Configurations for Emergency Response
+│   ├── city/                           # Hydra subconfigurations for 'city'
+│   │   └── ...
+│   ├── demand/                         # Hydra subconfigurations for 'demand'
+│   │   └── ...
+│   ├── policy/                         # Hydra subconfigurations for 'policy'
+│   │   └── ...
+│   ├── solver/                         # Hydra subconfigurations for 'solver'
+│   │   └── ...
+│   └── config.yaml                     # Root configuration (defaults, seed, simulation parameters)
+├── data/                               # Data (input) for the current simulation
+│   ├── osm/                            # OSM files downloaded geofabrik.de
+│   ├── osmium/                         # OSM files extracted using 'osmium-tool'
+│   ├── osrm/                           # OSRM files pre-processed using an OSRM container
+│   ├── bounds.geojson                  # Geographic bounds
+│   ├── incidents.csv                   # Incidents CSV file
+│   └── stations_with_apparatus.csv     # Stations with apparatus CSV file
+├── docker/                             # Docker configurations and settings for containers from images
+│   └── vroom/                          # Docker configurations and settings for VROOM
+│       └── ...
+├── output/                             # Output of the current simulation job
+├── script/                             # Scripts for various operations
+│   ├── download_osm_data.sh            # Download desired OSM data to a default path
+│   ├── extract_region.sh               # Extract a region from OSM data using 'osmium-tool'
+│   └── osrm_healthcheck.sh             # Health check an OSRM container
+├── src/                                # Source code of the modules
+│   ├── backend/                        # Backend module (using FastAPI)
+│   │   └── ...
+│   ├── db/                             # Database and storage management module (using postgres)
+│   │   └── ...
+│   ├── emergency_response/             # Module for event-driven simulation
+│   │   └── ...
+│   ├── utils/                          # Utilities for the overall project
+│   │   └── ...
+│   └── worker/                         # Worker module (job queueing and processing)
+│       └── ...
+├── storage/                            # Storage path
+│   └── jobs/                           # Storage path fo jobs (configs, data, output) under their ID
+├── tests/                              # Tests
+│   ├── conftest.py                     # Shared test fixtures for the emergency response gym test suite
+│   ├── e2e/                            # End-to-end tests
+│   │   └── ...
+│   ├── integration/                    # Integration tests
+│   │   └── ...
+│   └── unit/                           # Unit tests
+│       └── ...
+├── .env                                # Environment file (environment variables: DATABASE_URL, SECRET_KEY)
+├── Dockerfile                          # Dockerfile
+├── docker-compose.yml                  # Dockerfile (main)
+├── docker-compose_osrm_vroom.yml       # Dokcerfile (for OSRM and VROOM)
+├── pyproject.toml                      # Python project configuration (metadata, dependencies, build system)
+└── README.md                           # ReadMe MarkDown file (this document)
 ```
 
 ## Hydra configuration
 
 ```
 configs/
-├── config.yaml          # Root config (defaults, seed, simulation params)
-├── city/
-│   └── davidson.yaml    # Davidson County bbox, H3 resolution, stations CSV
-├── demand/
-│   └── empirical.yaml   # Path to incidents.csv
-├── policy/
-│   └── nearest.yaml     # type: nearest
-└── solver/
-    └── nearest.yaml     # type: nearest
+├── config.yaml                         # Root configuration (defaults, seed, simulation parameters)
+├── city/                               # Hydra subconfigurations for 'city'
+│   └── davidson.yaml                   # Davidson County bbox, H3 resolution, stations CSV
+├── demand/                             # Hydra subconfigurations for 'demand'
+│   └── empirical.yaml                  # Demand type and path to incidents.csv
+├── policy/                             # Hydra subconfigurations for 'policy'
+│   └── nearest.yaml                    # Dispatch policy type: nearest
+└── solver/                             # Hydra subconfigurations for 'solver'
+    └── nearest.yaml                    # Dispatch solver type: nearest
 ```
 
 ### Root config (`config.yaml`)
@@ -192,27 +258,114 @@ uv run python -m emergency_response.app simulation.max_incidents=500 seed=7
 
 To add a new city, create `configs/city/<name>.yaml` with the same structure as `davidson.yaml` and run with `city=<name>`.
 
+## Source code
+
+```
+src/
+├── backend/                            # Backend module (using FastAPI)
+│   ├── routes/                         # Routes submodule
+│   │   ├── auth.py                     # User authentication routes
+│   │   ├── jobs.py                     # User jobs route
+│   │   └── sim.py                      # Simulation routes
+│   ├── schemas/                        # Schemas submodule of backend
+│   │   └── sim.py                      # Schemas for simulation-related objects
+│   ├── services/                       # Services submodule of backend
+│   │   ├── auth.py                     # Services for user authentication
+│   │   └── sim.py                      # Services for simulation-related objects
+│   ├── config.py                       # Configuration file for backend
+│   └── main.py                         # Entry point for backend
+├── db/                                 # Database and storage management module (using postgres)
+│   ├── crud.py                         # Fundamental CRUD (Create, Read, Update, Delete) operations
+│   ├── models.py                       # Models for database (User, Job)
+│   ├── session.py                      # Session manager
+│   └── storage.py                      # Storage manager
+├── emergency_response/                 # Module for event-driven simulation
+│   ├── env/                            # Environment
+│   │   └── emergency_env.py            # EmergencyEnv (the core simulation)
+│   ├── demand/                         # Demand
+│   │   ├── base.py                     # IncidentModel ABC
+│   │   └── empirical.py                # Replays incidents.csv chronologically
+│   ├── geography/                      # Geography
+│   │   ├── base.py                     # TravelTimeProvider protocol (OSRM-like interface)
+│   │   ├── network.py                  # NetworkGeography (OSMnx + cached shortest paths)
+│   │   └── h3_index.py                 # H3 spatial index for coordinate snapping
+│   ├── models/                         # Models
+│   │   ├── core.py                     # Incident, Apparatus, FireStation, State, enums
+│   │   └── scenario.py                 # Scenario config dataclass
+│   ├── policy/                         # Policies
+│   │   ├── base.py                     # DispatchPolicy ABC
+│   │   └── nearest.py                  # Nearest available apparatus heuristic
+│   ├── solver/                         # DispatchSolver
+│   │   ├── base.py                     # DispatchSolver ABC
+│   │   └── nearest.py                  # Greedy nearest solver
+│   ├── utils/                          # Utilities for emergency_response module
+│   │   ├── cache.py                    # load_or_compute (pickle-based)
+│   │   └── loaders.py                  # CSV/GeoJSON loaders + coordinate snapping
+│   ├── app.py                          # Hydra entry point
+│   └── metrics.py                      # Incident reporting + CSV export
+├── utils/                              # Utilities for the overall project
+│   └── config_validator.py             # Configuration path validator
+└── worker                              # Worker module ((job queueing and processing)
+    ├── main.py                         # Entry point of the worker module
+    ├── processor.py                    # Job processor
+    └── runner.py                       # Queue runner
+```
+
 ## Data files
 
 | File | Source | Description |
 |---|---|---|
+| `data/osm/` | [geofabrik.de](https://www.geofabrik.de/en/index.html) | OSM data (downloaded)  |
+| `data/osmium/` | N/A | OSM data (extracted using `osmium-tool`)  |
+| `data/osrm/` | N/A | OSRM data (pre-processed using OSRM) |
 | `data/incidents.csv` | Nashville FD | 150K+ incidents with lat/lon, type, level, category, datetime |
 | `data/stations_with_apparatus.csv` | Nashville FD | 36 fire stations with apparatus inventory by type |
 | `data/bounds.geojson` | Nashville FD | Davidson County service area polygon |
 
 ## Tests
 
+```
+tests/
+├── conftest.py                         # Shared test fixtures for the emergency response gym test suite
+├── e2e/                                # End-to-end tests
+│   ├── test_backend_db_worker.py       # End-to-end tests for the backend, database and worker suite
+│   ├── test_backend_sim_api.py         # End-to-end tests for the backend simulation API
+│   ├── test_full_src_stack.py          # End-to-end tests for the full stack packages under src
+│   ├── test_job_lifecycle.py           # End-to-end tests for the job lifecycle
+│   └── test_simulation.py              # End-to-end tests of simulation engine using mock geography
+├── integration/                        # Integration tests
+│   ├── rest_backend_auth_jobs.py       # Integration tests for backend auth and jobs routes with database CRUD
+│   ├── test_backend_db_worker.py       # Integration tests for backend, database, and worker suite
+│   ├── test_backend_sim_config.py      # Integration tests for backend sim route and configuration loading
+│   ├── test_dispatch.py                # Integration tests for dispatch: policy, solver, geography
+│   ├── test_geography.py               # Integration tests for geography: NetworkGeography
+│   ├── test_snapping.py                # Integration tests for coordinate snapping
+│   └── test_worker_processing.py       # Integration tests for worker processing, backend schemas and storage
+└── unit/                               # Unit tests
+    ├── test_backend.py                 # Unit tests for backend
+    ├── test_db.py                      # Unit tests for database
+    ├── test_demand.py                  # Unit tests for the empirical incident model
+    ├── test_edge_cases.py              # Unit tests for edge cases across the system
+    ├── test_h3_index.py                # Unit tests for H3 spatial index
+    ├── test_loaders.py                 # Unit tests for data loaders
+    ├── test_logs.py                    # Unit tests for apparatus event logs and step trace records
+    ├── test_models.py                  # Unit tests for core data models
+    ├── test_solver.py                  # Unit tests for the nearest dispatch solver
+    ├── test_utils.py                   # Unit tests for utilities
+    └── test_worker.py                  # Unit tests for worker
+```
+
 ```bash
-# Run all 73 tests
+# Run all 167 tests
 uv run pytest
 
 # Run by tier
-uv run pytest tests/unit/           # 41 tests — fast, no I/O
-uv run pytest tests/integration/    # 13 tests — geography + dispatch + snapping
-uv run pytest tests/e2e/            # 9 tests  — full simulation loops
+uv run pytest tests/unit/               # 133 tests — fast, no I/O
+uv run pytest tests/integration/        # 20 tests — geography + dispatch + snapping, backend, db, worker, utils
+uv run pytest tests/e2e/                # 14 tests — full simulation loops
 
 # With coverage
-uv run pytest --cov=emergency_response
+uv run pytest --cov=emergency_response  # Value is Change 'emergency_response' to any module under 'src'
 ```
 
 ## Extensibility

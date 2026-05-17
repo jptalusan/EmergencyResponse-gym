@@ -7,7 +7,7 @@ build/
 *.egg
 .venv/
 venv/
-.env
+.env/
 *.so
 .ruff_cache/
 .pytest_cache/
@@ -21,3 +21,4 @@ uv.lock
 *.osm.pbf
 *.osrm
 *.osrm.*
+.DS_Store

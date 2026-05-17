@@ -1,0 +1,68 @@
+services:
+
+  osrm-prep:
+    image: osrm/osrm-backend:latest
+    container_name: osrm-preprocessing
+    volumes:
+      - ${PWD}/data/osm:/data_osm
+      - ${PWD}/data/osmium:/data_osmium
+      - ${PWD}/data/osrm:/data
+    command: >
+      sh -c "
+      set -e;
+
+      if [ ! -f /data/map.osrm.partition ]; then
+        echo 'Preprocessing OSRM data...';
+
+        if [ -f /data/map.osm.pbf ]; then
+          echo 'Map PBF file exists';
+        elif [ -f /data_osmium/osm_data_extract.osm.pbf ]; then
+          cp /data_osmium/osm_data_extract.osm.pbf /data/map.osm.pbf;
+        elif [ -f /data_osm/osm_data.osm.pbf ]; then
+          cp /data_osm/osm_data.osm.pbf /data/map.osm.pbf;
+        else
+          echo 'No OSM file found';
+          exit 1;
+        fi
+
+        osrm-extract -p /opt/car.lua /data/map.osm.pbf &&
+        osrm-partition /data/map.osrm &&
+        osrm-customize /data/map.osrm;
+
+        echo 'Preprocessing complete';
+      else
+        echo 'OSRM already exists';
+      fi
+      "
+    restart: "no"
+
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: osrm
+    depends_on:
+      osrm-prep:
+        condition: service_completed_successfully
+    ports:
+      - "5000:5000"
+    volumes:
+      - ${PWD}/data/osrm:/data
+      - ${PWD}/script/osrm_healthcheck.sh:/osrm_healthcheck.sh:ro
+    command: osrm-routed --algorithm mld /data/map.osrm
+    healthcheck:
+      test: ["CMD", "bash", "/osrm_healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+  vroom:
+    image: ghcr.io/vroom-project/vroom-docker:v1.15.0
+    container_name: vroom
+    volumes:
+      - ./docker/vroom/config.yml:/conf/config.yml
+    ports:
+      - "3000:3000"
+    depends_on:
+      osrm:
+        condition: service_healthy

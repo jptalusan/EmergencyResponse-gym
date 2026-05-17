@@ -1,1 +1,1 @@
-# src/backend/schemas/__init__.py
+# src/backend/schema/__init__.py
